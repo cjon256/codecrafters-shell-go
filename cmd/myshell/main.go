@@ -29,6 +29,13 @@ func main() {
 		} else if cmd == "echo" {
 			echoing := strings.Join(fields[1:], " ")
 			fmt.Fprintf(os.Stdout, "%s\n", echoing)
+		} else if cmd == "type" {
+			typeCmd := fields[1]
+			if typeCmd == "exit" || typeCmd == "echo" || typeCmd == "type" {
+				fmt.Fprintf(os.Stdout, "%s is a shell builtin\n", typeCmd)
+			} else {
+				fmt.Fprintf(os.Stdout, "%s: not found\n", cmd)
+			}
 		} else {
 			fmt.Fprintf(os.Stdout, "%s: not found\n", cmd)
 		}
