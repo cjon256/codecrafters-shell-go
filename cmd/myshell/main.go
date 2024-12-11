@@ -34,7 +34,7 @@ func main() {
 			if typeCmd == "exit" || typeCmd == "echo" || typeCmd == "type" {
 				fmt.Fprintf(os.Stdout, "%s is a shell builtin\n", typeCmd)
 			} else {
-				fmt.Fprintf(os.Stdout, "%s: not found\n", cmd)
+				fmt.Fprintf(os.Stdout, "%s: not found\n", typeCmd)
 			}
 		} else {
 			fmt.Fprintf(os.Stdout, "%s: not found\n", cmd)
