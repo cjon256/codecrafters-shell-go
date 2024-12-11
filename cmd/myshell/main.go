@@ -12,19 +12,23 @@ var _ = fmt.Fprint
 
 func main() {
 	reader := bufio.NewReader(os.Stdin)
-	var cmd_line string
+	var cmdLine string
 	var err error
 
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
 		// Wait for user input
-		cmd_line, err = reader.ReadString('\n')
+		cmdLine, err = reader.ReadString('\n')
 		if err != nil {
 			break
 		}
-		cmd := strings.Fields(cmd_line)[0]
+		fields := strings.Fields(cmdLine)
+		cmd := fields[0]
 		if cmd == "exit" {
 			break
+		} else if cmd == "echo" {
+			echoing := strings.Join(fields[1:], " ")
+			fmt.Fprintf(os.Stdout, "%s\n", echoing)
 		} else {
 			fmt.Fprintf(os.Stdout, "%s: not found\n", cmd)
 		}
