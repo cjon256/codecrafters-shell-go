@@ -9,8 +9,10 @@ import (
 	"strings"
 )
 
-func find_file(fname string, paths []string) (string, error) {
-	for _, p := range paths {
+var path []string
+
+func find_file(fname string) (string, error) {
+	for _, p := range path {
 		loc := filepath.Join(p, fname)
 		_, e := os.Stat(loc)
 		if e == nil {
@@ -20,39 +22,41 @@ func find_file(fname string, paths []string) (string, error) {
 	return "", errors.New("")
 }
 
+func typeCmd(arg0 string) string {
+	if arg0 == "exit" || arg0 == "echo" || arg0 == "type" {
+		return fmt.Sprintf("%s is a shell builtin\n", arg0)
+	} else {
+		loc, err := find_file(arg0)
+		if err == nil {
+			return fmt.Sprintf("%s is %s\n", arg0, loc)
+		} else {
+			return fmt.Sprintf("%s: not found\n", arg0)
+		}
+	}
+}
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
-	var cmdLine string
-	var err error
 	raw_path := os.Getenv("PATH")
-	paths := strings.Split(raw_path, ":")
+	path = strings.Split(raw_path, ":")
 
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
 		// Wait for user input
-		cmdLine, err = reader.ReadString('\n')
+		cmdLine, err := reader.ReadString('\n')
 		if err != nil {
 			break
 		}
 		fields := strings.Fields(cmdLine)
 		cmd := fields[0]
+		args := fields[1:]
 		if cmd == "exit" {
 			break
 		} else if cmd == "echo" {
-			echoing := strings.Join(fields[1:], " ")
+			echoing := strings.Join(args, " ")
 			fmt.Fprintf(os.Stdout, "%s\n", echoing)
 		} else if cmd == "type" {
-			typeCmd := fields[1]
-			if typeCmd == "exit" || typeCmd == "echo" || typeCmd == "type" {
-				fmt.Fprintf(os.Stdout, "%s is a shell builtin\n", typeCmd)
-			} else {
-				loc, err := find_file(fields[1], paths)
-				if err == nil {
-					fmt.Fprintf(os.Stdout, "%s is %s\n", typeCmd, loc)
-				} else {
-					fmt.Fprintf(os.Stdout, "%s: not found\n", typeCmd)
-				}
-			}
+			fmt.Fprint(os.Stdout, typeCmd(args[0]))
 		} else {
 			fmt.Fprintf(os.Stdout, "%s: not found\n", cmd)
 		}
