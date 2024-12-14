@@ -2,18 +2,30 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
-// Ensures gofmt doesn't remove the "fmt" import in stage 1 (feel free to remove this!)
-var _ = fmt.Fprint
+func find_file(fname string, paths []string) (string, error) {
+	for _, p := range paths {
+		loc := filepath.Join(p, fname)
+		_, e := os.Stat(loc)
+		if e == nil {
+			return loc, nil
+		}
+	}
+	return "", errors.New("")
+}
 
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	var cmdLine string
 	var err error
+	raw_path := os.Getenv("PATH")
+	paths := strings.Split(raw_path, ":")
 
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
@@ -34,7 +46,12 @@ func main() {
 			if typeCmd == "exit" || typeCmd == "echo" || typeCmd == "type" {
 				fmt.Fprintf(os.Stdout, "%s is a shell builtin\n", typeCmd)
 			} else {
-				fmt.Fprintf(os.Stdout, "%s: not found\n", typeCmd)
+				loc, err := find_file(fields[1], paths)
+				if err == nil {
+					fmt.Fprintf(os.Stdout, "%s is %s\n", typeCmd, loc)
+				} else {
+					fmt.Fprintf(os.Stdout, "%s: not found\n", typeCmd)
+				}
 			}
 		} else {
 			fmt.Fprintf(os.Stdout, "%s: not found\n", cmd)
