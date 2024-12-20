@@ -36,6 +36,23 @@ func typeCmd(arg0 string) string {
 	}
 }
 
+func callCmd(cmd string, args []string) string {
+	cmdName, err := find_file(cmd)
+	if err != nil {
+		return fmt.Sprintf("%s: command not found\n", cmd)
+	} else {
+		result := exec.Command(cmdName, args...)
+		output, err := result.Output()
+		if err != nil {
+			// we don't actually do anything different here, but probably should be
+			// a separate path
+			return string(output)
+		} else {
+			return string(output)
+		}
+	}
+}
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	raw_path := os.Getenv("PATH")
@@ -59,20 +76,7 @@ func main() {
 		} else if cmd == "type" {
 			fmt.Fprint(os.Stdout, typeCmd(args[0]))
 		} else {
-			cmdName, err := find_file(cmd)
-			if err != nil {
-				fmt.Fprintf(os.Stdout, "%s: command not found\n", cmd)
-			} else {
-				result := exec.Command(cmdName, args...)
-				output, err := result.Output()
-				if err != nil {
-					// we don't actually do anything different here, but probably should be
-					// a separate path
-					fmt.Fprintln(os.Stdout, string(output))
-				} else {
-					fmt.Fprint(os.Stdout, string(output))
-				}
-			}
+			fmt.Fprint(os.Stdout, callCmd(cmd, args))
 		}
 	}
 }
