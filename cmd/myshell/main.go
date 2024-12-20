@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -58,7 +59,20 @@ func main() {
 		} else if cmd == "type" {
 			fmt.Fprint(os.Stdout, typeCmd(args[0]))
 		} else {
-			fmt.Fprintf(os.Stdout, "%s: not found\n", cmd)
+			cmdName, err := find_file(cmd)
+			if err != nil {
+				fmt.Fprintf(os.Stdout, "%s: not found\n", cmd)
+			} else {
+				result := exec.Command(cmdName, args...)
+				output, err := result.Output()
+				if err != nil {
+					// we don't actually do anything different here, but probably should be
+					// a separate path
+					fmt.Fprintln(os.Stdout, string(output))
+				} else {
+					fmt.Fprintln(os.Stdout, string(output))
+				}
+			}
 		}
 	}
 }
