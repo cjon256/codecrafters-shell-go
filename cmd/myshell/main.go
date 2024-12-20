@@ -53,6 +53,14 @@ func callCmd(cmd string, args []string) string {
 	}
 }
 
+func pwdCmd() string {
+	path, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+	}
+	return path
+}
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	raw_path := os.Getenv("PATH")
@@ -75,6 +83,8 @@ func main() {
 			fmt.Fprintf(os.Stdout, "%s\n", echoing)
 		} else if cmd == "type" {
 			fmt.Fprint(os.Stdout, typeCmd(args[0]))
+		} else if cmd == "pwd" {
+			fmt.Fprintln(os.Stdout, pwdCmd())
 		} else {
 			fmt.Fprint(os.Stdout, callCmd(cmd, args))
 		}
