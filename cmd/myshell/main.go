@@ -70,7 +70,7 @@ func main() {
 					// a separate path
 					fmt.Fprintln(os.Stdout, string(output))
 				} else {
-					fmt.Fprintln(os.Stdout, string(output))
+					fmt.Fprint(os.Stdout, string(output))
 				}
 			}
 		}
