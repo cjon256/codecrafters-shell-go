@@ -61,7 +61,7 @@ func main() {
 		} else {
 			cmdName, err := find_file(cmd)
 			if err != nil {
-				fmt.Fprintf(os.Stdout, "%s: not found\n", cmd)
+				fmt.Fprintf(os.Stdout, "%s: command not found\n", cmd)
 			} else {
 				result := exec.Command(cmdName, args...)
 				output, err := result.Output()
