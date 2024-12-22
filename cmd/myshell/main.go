@@ -24,7 +24,7 @@ func find_file(fname string) (string, error) {
 }
 
 func typeCmd(arg0 string) string {
-	if arg0 == "exit" || arg0 == "echo" || arg0 == "type" {
+	if arg0 == "exit" || arg0 == "echo" || arg0 == "type" || arg0 == "pwd" {
 		return fmt.Sprintf("%s is a shell builtin\n", arg0)
 	} else {
 		loc, err := find_file(arg0)
