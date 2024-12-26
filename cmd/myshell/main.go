@@ -24,7 +24,7 @@ func find_file(fname string) (string, error) {
 }
 
 func typeCmd(arg0 string) string {
-	if arg0 == "exit" || arg0 == "echo" || arg0 == "type" || arg0 == "pwd" {
+	if arg0 == "exit" || arg0 == "echo" || arg0 == "type" || arg0 == "pwd" || arg0 == "cd" {
 		return fmt.Sprintf("%s is a shell builtin\n", arg0)
 	} else {
 		loc, err := find_file(arg0)
@@ -61,6 +61,21 @@ func pwdCmd() string {
 	return path
 }
 
+func cdCmd(args []string) error {
+	if len(args) > 1 {
+		return errors.New("cd: too many arguments")
+	}
+	err := os.Chdir(args[0])
+	if err != nil {
+		return err
+	}
+	// check to see if arg0 is a directory that exists
+	// "%s: No such file or directory"
+	// cd: README.md: Not a directory
+	// ok, error situations handled... now actually cd
+	return nil
+}
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	raw_path := os.Getenv("PATH")
@@ -78,16 +93,23 @@ func main() {
 		fields := strings.Fields(cmdLine)
 		cmd := fields[0]
 		args := fields[1:]
-		if cmd == "exit" {
-			break
-		} else if cmd == "echo" {
+
+		switch cmd {
+		case "exit":
+			return
+		case "echo":
 			echoing := strings.Join(args, " ")
 			fmt.Fprintf(os.Stdout, "%s\n", echoing)
-		} else if cmd == "type" {
+		case "type":
 			fmt.Fprint(os.Stdout, typeCmd(args[0]))
-		} else if cmd == "pwd" {
+		case "pwd":
 			fmt.Fprintln(os.Stdout, pwdCmd())
-		} else {
+		case "cd":
+			err := cdCmd(args)
+			if err != nil {
+				fmt.Println(err)
+			}
+		default:
 			fmt.Fprint(os.Stdout, callCmd(cmd, args))
 		}
 	}
