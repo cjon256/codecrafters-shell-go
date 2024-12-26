@@ -69,7 +69,7 @@ func cdCmd(args []string) error {
 	err := os.Chdir(args[0])
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return errors.New(fmt.Sprintf("%s: No such file or directory", args[0]))
+			return fmt.Errorf("%s: No such file or directory", args[0])
 		} else {
 			return err
 		}
