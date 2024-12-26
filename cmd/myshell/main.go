@@ -68,15 +68,11 @@ func cdCmd(args []string) error {
 	}
 	err := os.Chdir(args[0])
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("%s: No such file or directory", args[0])
+		var pathError *fs.PathError
+		if errors.As(err, &pathError) {
+			return pathError.Err
 		} else {
-			var pathError *fs.PathError
-			if errors.As(err, &pathError) {
-				return fmt.Errorf("%s: Not a directory", args[0])
-			} else {
-				return err
-			}
+			return err
 		}
 	}
 	// check to see if arg0 is a directory that exists
@@ -90,6 +86,12 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	raw_path := os.Getenv("PATH")
 	path = strings.Split(raw_path, ":")
+	capitalizeFirst := func(str string) string {
+		if len(str) == 0 {
+			return str
+		}
+		return strings.ToUpper(str[:1]) + str[1:]
+	}
 
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
@@ -117,7 +119,8 @@ func main() {
 		case "cd":
 			err := cdCmd(args)
 			if err != nil {
-				fmt.Printf("cd: %s\n", err)
+				err_message := capitalizeFirst(fmt.Sprintf("%s", err))
+				fmt.Printf("cd: %s\n", err_message)
 			}
 		default:
 			fmt.Fprint(os.Stdout, callCmd(cmd, args))
