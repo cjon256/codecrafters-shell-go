@@ -70,10 +70,13 @@ func cdCmd(args []string) error {
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("%s: No such file or directory", args[0])
-		} else if errors.Is(err, fs.PathError) {
-			return fmt.Errorf("%s: Not a directory", args[0])
 		} else {
-			return err
+			var pathError *fs.PathError
+			if errors.As(err, &pathError) {
+				return fmt.Errorf("%s: Not a directory", args[0])
+			} else {
+				return err
+			}
 		}
 	}
 	// check to see if arg0 is a directory that exists
