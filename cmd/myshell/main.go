@@ -71,8 +71,10 @@ func main() {
 		// Wait for user input
 		cmdLine, err := reader.ReadString('\n')
 		if err != nil {
+			// should probably do more to handle, or print an error message?
 			break
 		}
+
 		fields := strings.Fields(cmdLine)
 		cmd := fields[0]
 		args := fields[1:]
