@@ -63,14 +63,30 @@ func pwdCmd() string {
 }
 
 func cdCmd(args []string) error {
+	if len(args) == 0 {
+		// not handling this yet
+		return nil
+	}
 	if len(args) > 1 {
 		return errors.New("chdir too many arguments")
 	}
-	err := os.Chdir(args[0])
+	arg0 := args[0]
+	err := os.Chdir(arg0)
 	if err != nil {
 		var pathError *fs.PathError
 		if errors.As(err, &pathError) {
-			return pathError.Err
+			capitalizeFirst := func(str string) string {
+				if len(str) == 0 {
+					return str
+				}
+				return strings.ToUpper(str[:1]) + str[1:]
+			}
+
+			err_message := fmt.Sprintf("%s", err)
+			err_message = strings.Trim(strings.Split(err_message, ":")[1], " ")
+			err_message = capitalizeFirst(err_message)
+
+			return fmt.Errorf("%s: %s", arg0, err_message)
 		} else {
 			return err
 		}
@@ -86,12 +102,6 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	raw_path := os.Getenv("PATH")
 	path = strings.Split(raw_path, ":")
-	capitalizeFirst := func(str string) string {
-		if len(str) == 0 {
-			return str
-		}
-		return strings.ToUpper(str[:1]) + str[1:]
-	}
 
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
@@ -119,8 +129,7 @@ func main() {
 		case "cd":
 			err := cdCmd(args)
 			if err != nil {
-				err_message := capitalizeFirst(fmt.Sprintf("%s", err))
-				fmt.Printf("cd: %s\n", err_message)
+				fmt.Printf("cd: %s\n", err)
 			}
 		default:
 			fmt.Fprint(os.Stdout, callCmd(cmd, args))
