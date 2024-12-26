@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -63,11 +64,15 @@ func pwdCmd() string {
 
 func cdCmd(args []string) error {
 	if len(args) > 1 {
-		return errors.New("cd: too many arguments")
+		return errors.New("chdir too many arguments")
 	}
 	err := os.Chdir(args[0])
 	if err != nil {
-		return err
+		if errors.Is(err, fs.ErrNotExist) {
+			return errors.New(fmt.Sprintf("%s: No such file or directory", args[0]))
+		} else {
+			return err
+		}
 	}
 	// check to see if arg0 is a directory that exists
 	// "%s: No such file or directory"
@@ -107,7 +112,7 @@ func main() {
 		case "cd":
 			err := cdCmd(args)
 			if err != nil {
-				fmt.Println(err)
+				fmt.Printf("cd: %s\n", err)
 			}
 		default:
 			fmt.Fprint(os.Stdout, callCmd(cmd, args))
