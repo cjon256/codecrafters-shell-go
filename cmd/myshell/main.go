@@ -88,10 +88,6 @@ func cdCmd(args []string) error {
 			return err
 		}
 	}
-	// check to see if arg0 is a directory that exists
-	// "%s: No such file or directory"
-	// cd: README.md: Not a directory
-	// ok, error situations handled... now actually cd
 	return nil
 }
 
