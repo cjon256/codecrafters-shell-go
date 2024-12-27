@@ -82,10 +82,7 @@ func cdCmd(args []string) error {
 				return strings.ToUpper(str[:1]) + str[1:]
 			}
 
-			err_message := fmt.Sprintf("%s", err)
-			err_message = strings.Trim(strings.Split(err_message, ":")[1], " ")
-			err_message = capitalizeFirst(err_message)
-
+			err_message := capitalizeFirst(fmt.Sprintf("%s", pathError.Err))
 			return fmt.Errorf("%s: %s", arg0, err_message)
 		} else {
 			return err
