@@ -62,15 +62,7 @@ func pwdCmd() string {
 	return path
 }
 
-func cdCmd(args []string) error {
-	if len(args) == 0 {
-		// not handling this yet
-		return nil
-	}
-	if len(args) > 1 {
-		return errors.New("chdir too many arguments")
-	}
-	arg0 := args[0]
+func doCd(arg0 string) error {
 	err := os.Chdir(arg0)
 	if err != nil {
 		var pathError *fs.PathError
@@ -89,6 +81,26 @@ func cdCmd(args []string) error {
 		}
 	}
 	return nil
+}
+
+func cdHome() error {
+	home := os.Getenv("HOME")
+	return doCd(home)
+}
+
+func cdCmd(args []string) error {
+	if len(args) == 0 {
+		// not handling this yet
+		return cdHome()
+	}
+	if len(args) > 1 {
+		return errors.New("chdir too many arguments")
+	}
+	arg0 := args[0]
+	if arg0 == "~" {
+		return cdHome()
+	}
+	return doCd(arg0)
 }
 
 func main() {
