@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -9,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"unicode"
 )
 
 var path []string
@@ -90,7 +92,6 @@ func cdHome() error {
 
 func cdCmd(args []string) error {
 	if len(args) == 0 {
-		// not handling this yet
 		return cdHome()
 	}
 	if len(args) > 1 {
@@ -103,6 +104,87 @@ func cdCmd(args []string) error {
 	return doCd(arg0)
 }
 
+type commandAndArgs struct {
+	Cmd  string
+	Args []string
+}
+
+type ParserState int
+
+const (
+	NormalText ParserState = iota
+	SingleQuotedText
+)
+
+func parseSingleQuoted(s string) ([]string, error) {
+	// fmt.Printf("parseSingleQuote(s: %s)\n", s)
+	retval := []string{}
+	currentString := bytes.Buffer{}
+
+	for idx := 0; idx < len(s); idx++ {
+		switch {
+		case s[idx] == "'"[0]:
+			// fmt.Printf("ending single quote at position %d", idx)
+			if currentString.Len() > 0 {
+				retval = append(retval, currentString.String())
+			}
+			remainder, err := parse(s[idx+1:])
+			retval = append(retval, remainder...)
+			return retval, err
+		default:
+			currentString.WriteByte(s[idx])
+		}
+	}
+	return retval, errors.New("unclosed text")
+}
+
+func parse(s string) ([]string, error) {
+	// fmt.Printf("parse(s: %s)\n", s)
+	retval := []string{}
+	currentString := bytes.Buffer{}
+
+	for idx := 0; idx < len(s); idx++ {
+		switch {
+		case s[idx] == "'"[0]:
+			// fmt.Printf("starting single quote at position %d", idx)
+			if currentString.Len() > 0 {
+				retval = append(retval, currentString.String())
+			}
+			remainder, err := parseSingleQuoted(s[idx+1:])
+			retval = append(retval, remainder...)
+			return retval, err
+		case unicode.IsSpace(rune(s[idx])):
+			if currentString.Len() > 0 {
+				retval = append(retval, currentString.String())
+				currentString.Reset()
+			}
+		default:
+			currentString.WriteByte(s[idx])
+		}
+	}
+	return retval, nil
+}
+
+func getCmd(reader *bufio.Reader) (string, []string, error) {
+	cmdLine, err := reader.ReadString('\n')
+	if err != nil {
+		// should probably do more to handle, or print an error message?
+		return "", []string{}, err
+	}
+
+	// fields := strings.Fields(cmdLine)
+	fields, err := parse(cmdLine)
+	if err != nil {
+		return "", []string{}, err
+	}
+
+	cmd := fields[0]
+	args := fields[1:]
+	// fmt.Printf("cmd=%v args=%v\n", cmd, args)
+
+	return cmd, args, nil
+}
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	raw_path := os.Getenv("PATH")
@@ -111,15 +193,10 @@ func main() {
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
 		// Wait for user input
-		cmdLine, err := reader.ReadString('\n')
+		cmd, args, err := getCmd(reader)
 		if err != nil {
-			// should probably do more to handle, or print an error message?
-			break
+			os.Exit(-1)
 		}
-
-		fields := strings.Fields(cmdLine)
-		cmd := fields[0]
-		args := fields[1:]
 
 		switch cmd {
 		case "exit":
