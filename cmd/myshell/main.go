@@ -142,10 +142,14 @@ func parseDoubleQuoted(s string) ([]string, error) {
 	// fmt.Printf("parseDoubleQuoted(s: %s)\n", s)
 	retval := []string{}
 	currentString := bytes.Buffer{}
+	escaped := false
 
 	for idx := 0; idx < len(s); idx++ {
 		switch {
 		case s[idx] == "\""[0]:
+			if escaped {
+				escaped = false
+			}
 			// fmt.Printf("ending double quote at position %d", idx)
 			if currentString.Len() > 0 {
 				retval = append(retval, currentString.String())
@@ -153,8 +157,16 @@ func parseDoubleQuoted(s string) ([]string, error) {
 			remainder, err := parse(s[idx+1:])
 			retval = append(retval, remainder...)
 			return retval, err
+		case s[idx] == "\\"[0]:
+			if escaped {
+				currentString.WriteByte(s[idx])
+				escaped = false
+			} else {
+				escaped = true
+			}
 		default:
 			currentString.WriteByte(s[idx])
+			escaped = false
 		}
 	}
 	return retval, errors.New("unclosed text")
@@ -164,6 +176,7 @@ func parse(s string) ([]string, error) {
 	// fmt.Printf("parse(s: %s)\n", s)
 	retval := []string{}
 	currentString := bytes.Buffer{}
+	escaped := false
 
 	for idx := 0; idx < len(s); idx++ {
 		switch {
@@ -183,13 +196,26 @@ func parse(s string) ([]string, error) {
 			remainder, err := parseDoubleQuoted(s[idx+1:])
 			retval = append(retval, remainder...)
 			return retval, err
+		case s[idx] == "\\"[0]:
+			if escaped {
+				currentString.WriteByte(s[idx])
+				escaped = false
+			} else {
+				escaped = true
+			}
 		case unicode.IsSpace(rune(s[idx])):
-			if currentString.Len() > 0 {
-				retval = append(retval, currentString.String())
-				currentString.Reset()
+			if escaped {
+				currentString.WriteByte(s[idx])
+				escaped = false
+			} else {
+				if currentString.Len() > 0 {
+					retval = append(retval, currentString.String())
+					currentString.Reset()
+				}
 			}
 		default:
 			currentString.WriteByte(s[idx])
+			escaped = false
 		}
 	}
 	return retval, nil
@@ -206,6 +232,9 @@ func getCmd(reader *bufio.Reader) (string, []string, error) {
 	fields, err := parse(cmdLine)
 	if err != nil {
 		return "", []string{}, err
+	}
+	if len(fields) == 0 {
+		return "", []string{}, nil
 	}
 
 	cmd := fields[0]
