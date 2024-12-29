@@ -116,67 +116,55 @@ const (
 	SingleQuotedText
 )
 
-func parseSingleQuoted(s string) ([]string, error) {
-	// fmt.Printf("parseSingleQuote(s: %s)\n", s)
-	retval := []string{}
-	currentString := bytes.Buffer{}
+func parseSingleQuoted(s *string, start int, currentString *bytes.Buffer) (int, error) {
+	// fmt.Printf("parseSingleQuote(s: %s, start: %d, currentString: %s)\n", s, start, currentString.String())
+	var idx int
 
-	for idx := 0; idx < len(s); idx++ {
-		switch {
-		case s[idx] == "'"[0]:
-			// fmt.Printf("ending single quote at position %d", idx)
-			if currentString.Len() > 0 {
-				retval = append(retval, currentString.String())
-			}
-			remainder, err := parse(s[idx+1:])
-			retval = append(retval, remainder...)
-			return retval, err
+	for idx = start; idx < len(*s); idx++ {
+		switch (*s)[idx] {
+		case '\'':
+			// fmt.Printf("found a single quote at index %d\n", idx)
+			return idx, nil
 		default:
-			currentString.WriteByte(s[idx])
+			// fmt.Printf("adding byte %s\n", string((*s)[idx]))
+			currentString.WriteByte((*s)[idx])
 		}
 	}
-	return retval, errors.New("unclosed text")
+	return idx, errors.New("unclosed text")
 }
 
-func parseDoubleQuoted(s string) ([]string, error) {
-	// fmt.Printf("parseDoubleQuoted(s: %s)\n", s)
-	retval := []string{}
-	currentString := bytes.Buffer{}
+func parseDoubleQuoted(s *string, start int, currentString *bytes.Buffer) (int, error) {
 	escaped := false
+	var idx int
 
-	for idx := 0; idx < len(s); idx++ {
+	for idx = start; idx < len(*s); idx++ {
 		if escaped {
-			switch s[idx] {
-			case "\""[0]:
-				currentString.WriteByte(s[idx])
+			switch (*s)[idx] {
+			case '"':
+				currentString.WriteByte((*s)[idx])
 				escaped = false
-			case "\\"[0]:
-				currentString.WriteByte(s[idx])
+			case '\\':
+				currentString.WriteByte((*s)[idx])
 				escaped = false
 			default:
 				currentString.WriteByte("\\"[0])
-				currentString.WriteByte(s[idx])
+				currentString.WriteByte((*s)[idx])
 				escaped = false
 			}
 		} else {
-			switch s[idx] {
-			case "\""[0]:
+			switch (*s)[idx] {
+			case '"':
 				// fmt.Printf("ending double quote at position %d", idx)
-				if currentString.Len() > 0 {
-					retval = append(retval, currentString.String())
-				}
-				remainder, err := parse(s[idx+1:])
-				retval = append(retval, remainder...)
-				return retval, err
-			case "\\"[0]:
+				return idx, nil
+			case '\\':
 				escaped = true
 			default:
-				currentString.WriteByte(s[idx])
+				currentString.WriteByte((*s)[idx])
 				escaped = false
 			}
 		}
 	}
-	return retval, errors.New("unclosed text")
+	return idx, errors.New("unclosed text")
 }
 
 func parse(s string) ([]string, error) {
@@ -193,20 +181,18 @@ func parse(s string) ([]string, error) {
 			switch {
 			case s[idx] == "'"[0]:
 				// fmt.Printf("starting single quote at position %d", idx)
-				if currentString.Len() > 0 {
-					retval = append(retval, currentString.String())
+				ended_at, err := parseSingleQuoted(&s, idx+1, &currentString)
+				if err != nil {
+					return retval, err
 				}
-				remainder, err := parseSingleQuoted(s[idx+1:])
-				retval = append(retval, remainder...)
-				return retval, err
+				idx = ended_at
 			case s[idx] == "\""[0]:
 				// fmt.Printf("starting double quote at position %d", idx)
-				if currentString.Len() > 0 {
-					retval = append(retval, currentString.String())
+				ended_at, err := parseDoubleQuoted(&s, idx+1, &currentString)
+				if err != nil {
+					return retval, err
 				}
-				remainder, err := parseDoubleQuoted(s[idx+1:])
-				retval = append(retval, remainder...)
-				return retval, err
+				idx = ended_at
 			case s[idx] == "\\"[0]:
 				escaped = true
 			case unicode.IsSpace(rune(s[idx])):
