@@ -130,7 +130,7 @@ func parseSingleQuoted(s *string, start int, currentString *bytes.Buffer) (int, 
 			currentString.WriteByte((*s)[idx])
 		}
 	}
-	return idx, errors.New("unclosed text")
+	return idx, errors.New("unclosed single quote")
 }
 
 func parseDoubleQuoted(s *string, start int, currentString *bytes.Buffer) (int, error) {
@@ -164,7 +164,7 @@ func parseDoubleQuoted(s *string, start int, currentString *bytes.Buffer) (int, 
 			}
 		}
 	}
-	return idx, errors.New("unclosed text")
+	return idx, errors.New("unclosed double quote")
 }
 
 func parse(s string) ([]string, error) {
@@ -212,8 +212,8 @@ func parse(s string) ([]string, error) {
 func getCmd(reader *bufio.Reader) (string, []string, error) {
 	cmdLine, err := reader.ReadString('\n')
 	if err != nil {
-		// should probably do more to handle, or print an error message?
-		return "", []string{}, err
+		fmt.Fprintf(os.Stderr, "Unrecoverable error: %s\n", err)
+		os.Exit(-1)
 	}
 
 	// fields := strings.Fields(cmdLine)
@@ -242,7 +242,8 @@ func main() {
 		// Wait for user input
 		cmd, args, err := getCmd(reader)
 		if err != nil {
-			os.Exit(-1)
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			continue
 		}
 
 		switch cmd {
