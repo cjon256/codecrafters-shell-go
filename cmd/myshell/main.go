@@ -146,11 +146,21 @@ func parseDoubleQuoted(s string) ([]string, error) {
 
 	for idx := 0; idx < len(s); idx++ {
 		if escaped {
-			currentString.WriteByte(s[idx])
-			escaped = false
+			switch s[idx] {
+			case "\""[0]:
+				currentString.WriteByte(s[idx])
+				escaped = false
+			case "\\"[0]:
+				currentString.WriteByte(s[idx])
+				escaped = false
+			default:
+				currentString.WriteByte("\\"[0])
+				currentString.WriteByte(s[idx])
+				escaped = false
+			}
 		} else {
-			switch {
-			case s[idx] == "\""[0]:
+			switch s[idx] {
+			case "\""[0]:
 				// fmt.Printf("ending double quote at position %d", idx)
 				if currentString.Len() > 0 {
 					retval = append(retval, currentString.String())
@@ -158,7 +168,7 @@ func parseDoubleQuoted(s string) ([]string, error) {
 				remainder, err := parse(s[idx+1:])
 				retval = append(retval, remainder...)
 				return retval, err
-			case s[idx] == "\\"[0]:
+			case "\\"[0]:
 				escaped = true
 			default:
 				currentString.WriteByte(s[idx])
