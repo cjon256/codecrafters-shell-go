@@ -104,165 +104,241 @@ func cdCmd(args []string) error {
 	return doCd(arg0)
 }
 
-type commandAndArgs struct {
-	Cmd  string
-	Args []string
+type commandEnvironment struct {
+	Cmd    string
+	Args   []string
+	Stdout string
 }
 
-type ParserState int
-
-const (
-	NormalText ParserState = iota
-	SingleQuotedText
-)
-
-func parseSingleQuoted(s *string, start int, currentString *bytes.Buffer) (int, error) {
+func parseSingleQuoted(s *string, index *int, currentString *bytes.Buffer) error {
 	// fmt.Printf("parseSingleQuote(s: %s, start: %d, currentString: %s)\n", s, start, currentString.String())
-	var idx int
 
-	for idx = start; idx < len(*s); idx++ {
-		switch (*s)[idx] {
+	for ; *index < len(*s); (*index)++ {
+		switch (*s)[(*index)] {
 		case '\'':
-			// fmt.Printf("found a single quote at index %d\n", idx)
-			return idx, nil
+			// fmt.Printf("found a single quote at index %d\n", *index)
+			return nil
 		default:
-			// fmt.Printf("adding byte %s\n", string((*s)[idx]))
-			currentString.WriteByte((*s)[idx])
+			// fmt.Printf("adding byte %s\n", string((*s)[*index]))
+			currentString.WriteByte((*s)[*index])
 		}
 	}
-	return idx, errors.New("unclosed single quote")
+	return errors.New("unclosed single quote")
 }
 
-func parseDoubleQuoted(s *string, start int, currentString *bytes.Buffer) (int, error) {
+func parseDoubleQuoted(s *string, index *int, currentString *bytes.Buffer) error {
 	escaped := false
-	var idx int
 
-	for idx = start; idx < len(*s); idx++ {
+	for ; *index < len(*s); *index++ {
 		if escaped {
-			switch (*s)[idx] {
+			switch (*s)[*index] {
 			case '"':
-				currentString.WriteByte((*s)[idx])
+				currentString.WriteByte((*s)[*index])
 				escaped = false
 			case '\\':
-				currentString.WriteByte((*s)[idx])
+				currentString.WriteByte((*s)[*index])
 				escaped = false
 			default:
 				currentString.WriteByte("\\"[0])
-				currentString.WriteByte((*s)[idx])
+				currentString.WriteByte((*s)[*index])
 				escaped = false
 			}
 		} else {
-			switch (*s)[idx] {
+			switch (*s)[*index] {
 			case '"':
-				// fmt.Printf("ending double quote at position %d", idx)
-				return idx, nil
+				// fmt.Printf("ending double quote at position %d\n", *index)
+				return nil
 			case '\\':
 				escaped = true
 			default:
-				currentString.WriteByte((*s)[idx])
+				currentString.WriteByte((*s)[*index])
 				escaped = false
 			}
 		}
 	}
-	return idx, errors.New("unclosed double quote")
+	return errors.New("unclosed double quote")
 }
 
-func parse(s string) ([]string, error) {
-	// fmt.Printf("parse(s: %s)\n", s)
-	retval := []string{}
+func parseWord(s *string, index *int) (string, error) {
+	// fmt.Printf("parse(s: %s)\n", (*s))
 	currentString := bytes.Buffer{}
 	escaped := false
 
-	for idx := 0; idx < len(s); idx++ {
+	for ; *index < len(*s); (*index)++ {
 		if escaped {
-			currentString.WriteByte(s[idx])
+			currentString.WriteByte((*s)[*index])
 			escaped = false
 		} else {
 			switch {
-			case s[idx] == "'"[0]:
-				// fmt.Printf("starting single quote at position %d", idx)
-				ended_at, err := parseSingleQuoted(&s, idx+1, &currentString)
+			case (*s)[*index] == "'"[0]:
+				// fmt.Printf("starting single quote at position %d\n", *index)
+				*index++
+				err := parseSingleQuoted(s, index, &currentString)
 				if err != nil {
-					return retval, err
+					return currentString.String(), err
 				}
-				idx = ended_at
-			case s[idx] == "\""[0]:
-				// fmt.Printf("starting double quote at position %d", idx)
-				ended_at, err := parseDoubleQuoted(&s, idx+1, &currentString)
+			case (*s)[*index] == "\""[0]:
+				// fmt.Printf("starting double quote at position %d\n", *index)
+				*index++
+				err := parseDoubleQuoted(s, index, &currentString)
 				if err != nil {
-					return retval, err
+					return currentString.String(), err
 				}
-				idx = ended_at
-			case s[idx] == "\\"[0]:
+			case (*s)[*index] == "\\"[0]:
 				escaped = true
-			case unicode.IsSpace(rune(s[idx])):
+			case (*s)[*index] == '>':
+				currentString.WriteByte((*s)[*index])
+				*index++
+				return currentString.String(), nil
+			case (*s)[*index] == '1':
+				nextIndex := *index + 1
+				// fmt.Printf("s = %s %q %q\n", *s, (*s)[*index], (*s)[nextIndex])
+				// fmt.Printf("currentString = %s\n", currentString.String())
+
+				if nextIndex < len(*s) && (*s)[nextIndex] == '>' {
+					if currentString.Len() > 0 {
+						return currentString.String(), nil
+					} else {
+						// previous ended the word and we have 1> at the start of this word
+						*index++
+						currentString.WriteByte((*s)[*index])
+						*index++
+						return currentString.String(), nil
+					}
+				} else {
+					currentString.WriteByte((*s)[*index])
+					escaped = false
+				}
+			case unicode.IsSpace(rune((*s)[*index])):
 				if currentString.Len() > 0 {
-					retval = append(retval, currentString.String())
-					currentString.Reset()
+					return currentString.String(), nil
 				}
 			default:
-				currentString.WriteByte(s[idx])
+				currentString.WriteByte((*s)[*index])
 				escaped = false
 			}
 		}
 	}
-	return retval, nil
+	return currentString.String(), nil
 }
 
-func getCmd(reader *bufio.Reader) (string, []string, error) {
+func getOut(s *string, index *int) (string, error) {
+	out, err := parseWord(s, index)
+	if err != nil {
+		return "", err
+	}
+	if len(out) == 0 {
+		return "", errors.New("expected a filename after '>'")
+	}
+	return out, nil
+}
+
+func parse(s string) (commandEnvironment, error) {
+	// fmt.Printf("parse(s: %s)\n", s)
+	fields := []string{}
+	// stdout_file := ""
+	index := 0
+	rval := commandEnvironment{}
+
+	for index < len(s) {
+		word, err := parseWord(&s, &index)
+		if err != nil {
+			return rval, err
+		}
+		// fmt.Printf("word: %s\n", word)
+		if len(word) > 0 {
+			if word == ">" {
+				out, err := getOut(&s, &index)
+				if err != nil {
+					return rval, err
+				}
+				// fmt.Printf("out > %q\n", out)
+				rval.Stdout = out
+			} else {
+				fields = append(fields, word)
+			}
+		}
+	}
+	if len(fields) == 0 {
+		return rval, nil
+	}
+	rval.Cmd = fields[0]
+	rval.Args = fields[1:]
+	// fmt.Printf("rval = %+v\n", rval)
+	// fmt.Printf("len([%+v]) == %d\n", fields, len(fields))
+	return rval, nil
+}
+
+func getCmdEnv(reader *bufio.Reader) (*commandEnvironment, error) {
 	cmdLine, err := reader.ReadString('\n')
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unrecoverable error: %s\n", err)
 		os.Exit(-1)
 	}
-
-	// fields := strings.Fields(cmdLine)
-	fields, err := parse(cmdLine)
-	if err != nil {
-		return "", []string{}, err
-	}
-	if len(fields) == 0 {
-		return "", []string{}, nil
+	cmdEnv := commandEnvironment{}
+	if len(cmdLine) == 0 {
+		return &cmdEnv, nil
 	}
 
-	cmd := fields[0]
-	args := fields[1:]
+	{
+		var err error
+		cmdEnv, err = parse(cmdLine)
+		if err != nil {
+			return &cmdEnv, err
+		}
+	}
 	// fmt.Printf("cmd=%v args=%v\n", cmd, args)
-
-	return cmd, args, nil
+	return &cmdEnv, nil
 }
 
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	raw_path := os.Getenv("PATH")
 	path = strings.Split(raw_path, ":")
+	stdout := os.Stdout
+	var cmdEnv *commandEnvironment
 
 	for {
-		fmt.Fprint(os.Stdout, "$ ")
+		fmt.Fprint(stdout, "$ ")
 		// Wait for user input
-		cmd, args, err := getCmd(reader)
+		var err error
+		cmdEnv, err = getCmdEnv(reader)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 			continue
 		}
 
-		switch cmd {
+		if cmdEnv.Stdout != "" {
+			var err error
+			stdout, err = os.Create(cmdEnv.Stdout)
+			if err != nil {
+				stdout = os.Stdout
+				fmt.Fprintf(os.Stderr, "Err: %s\n", err)
+				continue
+			}
+		}
+		switch cmdEnv.Cmd {
+		case "":
+			stdout = os.Stdout
+			continue
 		case "exit":
 			return
 		case "echo":
-			echoing := strings.Join(args, " ")
-			fmt.Fprintf(os.Stdout, "%s\n", echoing)
+			echoing := strings.Join(cmdEnv.Args, " ")
+			fmt.Fprintf(stdout, "%s\n", echoing)
 		case "type":
-			fmt.Fprint(os.Stdout, typeCmd(args[0]))
+			fmt.Fprint(stdout, typeCmd(cmdEnv.Args[0]))
 		case "pwd":
-			fmt.Fprintln(os.Stdout, pwdCmd())
+			fmt.Fprintln(stdout, pwdCmd())
 		case "cd":
-			err := cdCmd(args)
+			err := cdCmd(cmdEnv.Args)
 			if err != nil {
-				fmt.Printf("cd: %s\n", err)
+				fmt.Fprintf(os.Stderr, "cd: %s\n", err)
 			}
 		default:
-			fmt.Fprint(os.Stdout, callCmd(cmd, args))
+			fmt.Fprint(stdout, callCmd(cmdEnv.Cmd, cmdEnv.Args))
 		}
+
+		stdout = os.Stdout
 	}
 }
