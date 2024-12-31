@@ -16,32 +16,32 @@ import (
 
 var path []string
 
-func find_file(fname string) (string, error) {
+func findFile(fname string) (string, error) {
 	for _, p := range path {
 		loc := filepath.Join(p, fname)
-		_, e := os.Stat(loc)
-		if e == nil {
+		_, err := os.Stat(loc)
+		if err == nil {
 			return loc, nil
 		}
 	}
 	return "", errors.New("")
 }
 
-func typeCmd(arg0 string) string {
-	if arg0 == "exit" || arg0 == "echo" || arg0 == "type" || arg0 == "pwd" || arg0 == "cd" {
-		return fmt.Sprintf("%s is a shell builtin\n", arg0)
+func typeCmd(cmd string) string {
+	if cmd == "exit" || cmd == "echo" || cmd == "type" || cmd == "pwd" || cmd == "cd" {
+		return fmt.Sprintf("%s is a shell builtin\n", cmd)
 	} else {
-		loc, err := find_file(arg0)
+		loc, err := findFile(cmd)
 		if err == nil {
-			return fmt.Sprintf("%s is %s\n", arg0, loc)
+			return fmt.Sprintf("%s is %s\n", cmd, loc)
 		} else {
-			return fmt.Sprintf("%s: not found\n", arg0)
+			return fmt.Sprintf("%s: not found\n", cmd)
 		}
 	}
 }
 
 func callCmd(cmd string, args []string) (string, string) {
-	cmdName, err := find_file(cmd)
+	cmdName, err := findFile(cmd)
 	if err != nil {
 		return "", fmt.Sprintf("%s: command not found\n", cmd)
 	} else {
@@ -66,24 +66,25 @@ func pwdCmd() string {
 	return path
 }
 
+func capitalizeFirst(str string) string {
+	if len(str) == 0 {
+		return str
+	}
+	return strings.ToUpper(str[:1]) + str[1:]
+}
+
 func doCd(arg0 string) error {
 	err := os.Chdir(arg0)
 	if err != nil {
 		var pathError *fs.PathError
 		if errors.As(err, &pathError) {
-			capitalizeFirst := func(str string) string {
-				if len(str) == 0 {
-					return str
-				}
-				return strings.ToUpper(str[:1]) + str[1:]
-			}
-
 			err_message := capitalizeFirst(fmt.Sprintf("%s", pathError.Err))
 			return fmt.Errorf("%s: %s", arg0, err_message)
-		} else {
-			return err
 		}
+		// this is unlikely, Chdir errors are almost always PathError
+		return err
 	}
+	// cd succeeded
 	return nil
 }
 
@@ -106,15 +107,7 @@ func cdCmd(args []string) error {
 	return doCd(arg0)
 }
 
-type commandEnvironment struct {
-	Cmd    string
-	Args   []string
-	Stdout string
-}
-
 func parseSingleQuoted(s *string, index *int, currentString *bytes.Buffer) error {
-	// fmt.Printf("parseSingleQuote(s: %s, start: %d, currentString: %s)\n", s, start, currentString.String())
-
 	for ; *index < len(*s); (*index)++ {
 		switch (*s)[(*index)] {
 		case '\'':
@@ -162,7 +155,6 @@ func parseDoubleQuoted(s *string, index *int, currentString *bytes.Buffer) error
 }
 
 func parseWord(s *string, index *int) (string, error) {
-	// fmt.Printf("parse(s: %s)\n", (*s))
 	currentString := bytes.Buffer{}
 	escaped := false
 
@@ -173,14 +165,12 @@ func parseWord(s *string, index *int) (string, error) {
 		} else {
 			switch {
 			case (*s)[*index] == "'"[0]:
-				// fmt.Printf("starting single quote at position %d\n", *index)
 				*index++
 				err := parseSingleQuoted(s, index, &currentString)
 				if err != nil {
 					return currentString.String(), err
 				}
 			case (*s)[*index] == "\""[0]:
-				// fmt.Printf("starting double quote at position %d\n", *index)
 				*index++
 				err := parseDoubleQuoted(s, index, &currentString)
 				if err != nil {
@@ -189,19 +179,24 @@ func parseWord(s *string, index *int) (string, error) {
 			case (*s)[*index] == "\\"[0]:
 				escaped = true
 			case (*s)[*index] == '>':
-				currentString.WriteByte((*s)[*index])
-				*index++
-				return currentString.String(), nil
+				if currentString.Len() > 0 {
+					// we have a word already, so stay on this character and return
+					return currentString.String(), nil
+				} else {
+					// we are not in a word, so return '>'
+					currentString.WriteByte((*s)[*index])
+					*index++
+					return currentString.String(), nil
+				}
 			case (*s)[*index] == '1':
 				nextIndex := *index + 1
-				// fmt.Printf("s = %s %q %q\n", *s, (*s)[*index], (*s)[nextIndex])
-				// fmt.Printf("currentString = %s\n", currentString.String())
-
 				if nextIndex < len(*s) && (*s)[nextIndex] == '>' {
+					// so next two characters are '1>'
 					if currentString.Len() > 0 {
+						// we have a word already, so stay on this character and return
 						return currentString.String(), nil
 					} else {
-						// previous ended the word and we have 1> at the start of this word
+						// we are not in a word, so return '>'
 						*index++
 						currentString.WriteByte((*s)[*index])
 						*index++
@@ -233,6 +228,12 @@ func getOut(s *string, index *int) (string, error) {
 		return "", errors.New("expected a filename after '>'")
 	}
 	return out, nil
+}
+
+type commandEnvironment struct {
+	Cmd    string
+	Args   []string
+	Stdout string
 }
 
 func parse(s string) (commandEnvironment, error) {
