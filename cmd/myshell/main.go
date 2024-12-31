@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -39,20 +40,21 @@ func typeCmd(arg0 string) string {
 	}
 }
 
-func callCmd(cmd string, args []string) string {
+func callCmd(cmd string, args []string) (string, string) {
 	cmdName, err := find_file(cmd)
 	if err != nil {
-		return fmt.Sprintf("%s: command not found\n", cmd)
+		return "", fmt.Sprintf("%s: command not found\n", cmd)
 	} else {
-		result := exec.Command(cmdName, args...)
-		output, err := result.Output()
+		execCmd := exec.Command(cmdName, args...)
+		var outStr, errStr bytes.Buffer
+		execCmd.Stdout = &outStr
+		execCmd.Stderr = &errStr
+		err = execCmd.Run()
 		if err != nil {
-			// we don't actually do anything different here, but probably should be
-			// a separate path
-			return string(output)
-		} else {
-			return string(output)
+			// fmt.Println("Error of some kind in callCmd(): ", err)
+			// this is where we would set the error status I assume?
 		}
+		return outStr.String(), errStr.String()
 	}
 }
 
@@ -272,6 +274,10 @@ func parse(s string) (commandEnvironment, error) {
 func getCmdEnv(reader *bufio.Reader) (*commandEnvironment, error) {
 	cmdLine, err := reader.ReadString('\n')
 	if err != nil {
+		if err == io.EOF {
+			fmt.Printf("\nexit\n")
+			os.Exit(0)
+		}
 		fmt.Fprintf(os.Stderr, "Unrecoverable error: %s\n", err)
 		os.Exit(-1)
 	}
@@ -336,7 +342,13 @@ func main() {
 				fmt.Fprintf(os.Stderr, "cd: %s\n", err)
 			}
 		default:
-			fmt.Fprint(stdout, callCmd(cmdEnv.Cmd, cmdEnv.Args))
+			outmessage, errmessage := callCmd(cmdEnv.Cmd, cmdEnv.Args)
+			if errmessage == "" {
+				fmt.Fprint(stdout, outmessage)
+			} else {
+				fmt.Fprint(os.Stderr, errmessage)
+				fmt.Fprint(stdout, outmessage)
+			}
 		}
 
 		stdout = os.Stdout
