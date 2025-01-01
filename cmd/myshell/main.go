@@ -41,27 +41,29 @@ func typeCmd(cmd string) string {
 }
 
 func callCmd(cmd string, args []string) (string, string) {
+	// need path to the actual command
 	cmdName, err := findFile(cmd)
 	if err != nil {
+		// command not found
 		return "", fmt.Sprintf("%s: command not found\n", cmd)
-	} else {
-		execCmd := exec.Command(cmdName, args...)
-		var outStr, errStr bytes.Buffer
-		execCmd.Stdout = &outStr
-		execCmd.Stderr = &errStr
-		err = execCmd.Run()
-		if err != nil {
-			// fmt.Println("Error of some kind in callCmd(): ", err)
-			// this is where we would set the error status I assume?
-		}
-		return outStr.String(), errStr.String()
 	}
+	execCmd := exec.Command(cmdName, args...)
+	var outStr, errStr bytes.Buffer
+	execCmd.Stdout = &outStr
+	execCmd.Stderr = &errStr
+	err = execCmd.Run()
+	if err != nil {
+		// fmt.Println("Error of some kind in callCmd(): ", err)
+		// this is where we would set the error status I assume?
+	}
+	return outStr.String(), errStr.String()
 }
 
 func pwdCmd() string {
+	// TODO maybe doesn't need a separate function?
 	path, err := os.Getwd()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stdout, err)
 	}
 	return path
 }
@@ -236,26 +238,22 @@ type commandEnvironment struct {
 	Stdout string
 }
 
-func parse(s string) (commandEnvironment, error) {
-	// fmt.Printf("parse(s: %s)\n", s)
+func parse(s string) (*commandEnvironment, error) {
 	fields := []string{}
-	// stdout_file := ""
 	index := 0
 	rval := commandEnvironment{}
 
 	for index < len(s) {
 		word, err := parseWord(&s, &index)
 		if err != nil {
-			return rval, err
+			return &rval, err
 		}
-		// fmt.Printf("word: %s\n", word)
 		if len(word) > 0 {
 			if word == ">" {
 				out, err := getOut(&s, &index)
 				if err != nil {
-					return rval, err
+					return &rval, err
 				}
-				// fmt.Printf("out > %q\n", out)
 				rval.Stdout = out
 			} else {
 				fields = append(fields, word)
@@ -263,39 +261,27 @@ func parse(s string) (commandEnvironment, error) {
 		}
 	}
 	if len(fields) == 0 {
-		return rval, nil
+		return &rval, nil
 	}
 	rval.Cmd = fields[0]
 	rval.Args = fields[1:]
-	// fmt.Printf("rval = %+v\n", rval)
-	// fmt.Printf("len([%+v]) == %d\n", fields, len(fields))
-	return rval, nil
+	return &rval, nil
 }
 
 func getCmdEnv(reader *bufio.Reader) (*commandEnvironment, error) {
+	// get input from the user
 	cmdLine, err := reader.ReadString('\n')
 	if err != nil {
 		if err == io.EOF {
+			// exit nicely on a ^D
 			fmt.Printf("\nexit\n")
 			os.Exit(0)
 		}
+		// it was something else, exit with error
 		fmt.Fprintf(os.Stderr, "Unrecoverable error: %s\n", err)
 		os.Exit(-1)
 	}
-	cmdEnv := commandEnvironment{}
-	if len(cmdLine) == 0 {
-		return &cmdEnv, nil
-	}
-
-	{
-		var err error
-		cmdEnv, err = parse(cmdLine)
-		if err != nil {
-			return &cmdEnv, err
-		}
-	}
-	// fmt.Printf("cmd=%v args=%v\n", cmd, args)
-	return &cmdEnv, nil
+	return parse(cmdLine)
 }
 
 func main() {
