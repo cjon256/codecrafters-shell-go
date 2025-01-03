@@ -20,14 +20,14 @@ var (
 	cmdLine  string
 )
 
-type cmdEnv struct {
+type commandEnviroment struct {
 	Cmd    string
 	Args   []string
 	Stdout string
 	Stderr string
 }
 
-type cmdFunc func(cmdEnv) (stdout, stderr string)
+type cmdFunc func(commandEnviroment) (stdout, stderr string)
 
 func findFile(fname string) (string, error) {
 	for _, p := range path {
@@ -40,7 +40,7 @@ func findFile(fname string) (string, error) {
 	return "", errors.New("")
 }
 
-func typeCmd(cmdargs cmdEnv) (string, string) {
+func typeCmd(cmdargs commandEnviroment) (string, string) {
 	stdout, stderr := "", ""
 	if len(cmdargs.Args) == 0 {
 		return "", ""
@@ -61,7 +61,7 @@ func typeCmd(cmdargs cmdEnv) (string, string) {
 	return stdout, stderr
 }
 
-func callCmd(cmdargs cmdEnv) (string, string) {
+func callCmd(cmdargs commandEnviroment) (string, string) {
 	// need path to the actual command
 	cmd := cmdargs.Cmd
 	args := cmdargs.Args
@@ -82,7 +82,7 @@ func callCmd(cmdargs cmdEnv) (string, string) {
 	return outStr.String(), errStr.String()
 }
 
-func pwdCmd(_ cmdEnv) (string, string) {
+func pwdCmd(_ commandEnviroment) (string, string) {
 	errString := ""
 	path, err := os.Getwd()
 	if err != nil {
@@ -99,7 +99,7 @@ func capitalizeFirst(str string) string {
 	return strings.ToUpper(str[:1]) + str[1:]
 }
 
-func cdCmd(cmdargs cmdEnv) (string, string) {
+func cdCmd(cmdargs commandEnviroment) (string, string) {
 	doCd := func(arg0 string) (string, string) {
 		err := os.Chdir(arg0)
 		if err != nil {
@@ -134,7 +134,7 @@ func cdCmd(cmdargs cmdEnv) (string, string) {
 	return doCd(arg0)
 }
 
-func parse(s string) (*cmdEnv, error) {
+func parse(s string) (*commandEnviroment, error) {
 	parseSingleQuoted := func(s *string, index *int, currentString *bytes.Buffer) error {
 		for ; *index < len(*s); (*index)++ {
 			switch (*s)[(*index)] {
@@ -260,7 +260,7 @@ func parse(s string) (*cmdEnv, error) {
 
 	fields := []string{}
 	index := 0
-	rval := cmdEnv{}
+	rval := commandEnviroment{}
 
 	for index < len(s) {
 		word, err := parseWord(&s, &index)
@@ -287,7 +287,7 @@ func parse(s string) (*cmdEnv, error) {
 	return &rval, nil
 }
 
-func getCmdEnv(reader *bufio.Reader) (*cmdEnv, error) {
+func getCmdEnv(reader *bufio.Reader) (*commandEnviroment, error) {
 	// get input from the user
 	cmdLine, err := reader.ReadString('\n')
 	if err != nil {
@@ -303,19 +303,19 @@ func getCmdEnv(reader *bufio.Reader) (*cmdEnv, error) {
 	return parse(cmdLine)
 }
 
-func exitCmd(_ cmdEnv) (string, string) {
+func exitCmd(_ commandEnviroment) (string, string) {
 	os.Exit(0)
 	// silly that this needs this, but...
 	return "", ""
 }
 
-func echoCmd(cmdargs cmdEnv) (string, string) {
+func echoCmd(cmdargs commandEnviroment) (string, string) {
 	echoing := strings.Join(cmdargs.Args, " ") + "\n"
 	// fmt.Fprintf(stdout, "%s\n", echoing)
 	return echoing, ""
 }
 
-func noopCmd(_ cmdEnv) (string, string) {
+func noopCmd(_ commandEnviroment) (string, string) {
 	return "", ""
 }
 
@@ -341,7 +341,7 @@ func main() {
 	path = strings.Split(raw_path, ":")
 	stdout := os.Stdout
 	stderr := os.Stderr
-	var cmdEnv *cmdEnv
+	var cmdEnv *commandEnviroment
 
 	for {
 		fmt.Fprint(stdout, "$ ")
@@ -371,8 +371,7 @@ func main() {
 				continue
 			}
 		}
-		what_we_are_doing := getCommand(cmdEnv.Cmd)
-		outmessage, errmessage := what_we_are_doing(*cmdEnv)
+		outmessage, errmessage := getCommand(cmdEnv.Cmd)(*cmdEnv)
 		fmt.Fprint(os.Stderr, errmessage)
 		fmt.Fprint(stdout, outmessage)
 
