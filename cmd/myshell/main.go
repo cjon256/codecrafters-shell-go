@@ -41,18 +41,24 @@ func findFile(fname string) (string, error) {
 }
 
 func typeCmd(cmdargs cmdEnv) (string, string) {
-	// TODO if args has multiple words we should type them all
-	cmd := cmdargs.Args[0]
-	if cmd == "exit" || cmd == "echo" || cmd == "type" || cmd == "pwd" || cmd == "cd" {
-		return fmt.Sprintf("%s is a shell builtin\n", cmd), ""
-	} else {
-		loc, err := findFile(cmd)
-		if err == nil {
-			return fmt.Sprintf("%s is %s\n", cmd, loc), ""
+	stdout, stderr := "", ""
+	if len(cmdargs.Args) == 0 {
+		return "", ""
+	}
+	for _, cmd := range cmdargs.Args {
+		_, isBuiltin := builtins[cmd]
+		if isBuiltin {
+			stdout += fmt.Sprintf("%s is a shell builtin\n", cmd)
 		} else {
-			return fmt.Sprintf("%s: not found\n", cmd), ""
+			loc, err := findFile(cmd)
+			if err == nil {
+				stdout += fmt.Sprintf("%s is %s\n", cmd, loc)
+			} else {
+				stderr += fmt.Sprintf("%s: not found\n", cmd)
+			}
 		}
 	}
+	return stdout, stderr
 }
 
 func callCmd(cmdargs cmdEnv) (string, string) {
