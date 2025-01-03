@@ -271,6 +271,7 @@ func parse(s string) (*commandEnviroment, error) {
 			continue
 		}
 		if word == ">" {
+			// TODO handle if there are multiple redirects in one commandline?
 			out, err := getOut(&s, &index)
 			if err != nil {
 				return &rval, err
@@ -353,6 +354,7 @@ func main() {
 			continue
 		}
 
+		// properly set stdout if there is one specified
 		if cmdEnv.Stderr != "" {
 			var err error
 			stderr, err = os.Create(cmdEnv.Stdout)
