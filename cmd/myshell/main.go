@@ -134,130 +134,130 @@ func cdCmd(cmdargs cmdEnv) (string, string) {
 	return doCd(arg0)
 }
 
-func parseSingleQuoted(s *string, index *int, currentString *bytes.Buffer) error {
-	for ; *index < len(*s); (*index)++ {
-		switch (*s)[(*index)] {
-		case '\'':
-			// fmt.Printf("found a single quote at index %d\n", *index)
-			return nil
-		default:
-			// fmt.Printf("adding byte %s\n", string((*s)[*index]))
-			currentString.WriteByte((*s)[*index])
-		}
-	}
-	return errors.New("unclosed single quote")
-}
-
-func parseDoubleQuoted(s *string, index *int, currentString *bytes.Buffer) error {
-	escaped := false
-
-	for ; *index < len(*s); *index++ {
-		if escaped {
-			switch (*s)[*index] {
-			case '"':
-				currentString.WriteByte((*s)[*index])
-				escaped = false
-			case '\\':
-				currentString.WriteByte((*s)[*index])
-				escaped = false
-			default:
-				currentString.WriteByte("\\"[0])
-				currentString.WriteByte((*s)[*index])
-				escaped = false
-			}
-		} else {
-			switch (*s)[*index] {
-			case '"':
-				// fmt.Printf("ending double quote at position %d\n", *index)
+func parse(s string) (*cmdEnv, error) {
+	parseSingleQuoted := func(s *string, index *int, currentString *bytes.Buffer) error {
+		for ; *index < len(*s); (*index)++ {
+			switch (*s)[(*index)] {
+			case '\'':
+				// fmt.Printf("found a single quote at index %d\n", *index)
 				return nil
-			case '\\':
-				escaped = true
 			default:
+				// fmt.Printf("adding byte %s\n", string((*s)[*index]))
 				currentString.WriteByte((*s)[*index])
-				escaped = false
 			}
 		}
+		return errors.New("unclosed single quote")
 	}
-	return errors.New("unclosed double quote")
-}
 
-func parseWord(s *string, index *int) (string, error) {
-	currentString := bytes.Buffer{}
-	escaped := false
+	parseDoubleQuoted := func(s *string, index *int, currentString *bytes.Buffer) error {
+		escaped := false
 
-	for ; *index < len(*s); (*index)++ {
-		if escaped {
-			currentString.WriteByte((*s)[*index])
-			escaped = false
-		} else {
-			switch {
-			case (*s)[*index] == "'"[0]:
-				*index++
-				err := parseSingleQuoted(s, index, &currentString)
-				if err != nil {
-					return currentString.String(), err
-				}
-			case (*s)[*index] == "\""[0]:
-				*index++
-				err := parseDoubleQuoted(s, index, &currentString)
-				if err != nil {
-					return currentString.String(), err
-				}
-			case (*s)[*index] == "\\"[0]:
-				escaped = true
-			case (*s)[*index] == '>':
-				if currentString.Len() > 0 {
-					// we have a word already, so stay on this character and return
-					return currentString.String(), nil
-				} else {
-					// we are not in a word, so return '>'
+		for ; *index < len(*s); *index++ {
+			if escaped {
+				switch (*s)[*index] {
+				case '"':
 					currentString.WriteByte((*s)[*index])
-					*index++
-					return currentString.String(), nil
+					escaped = false
+				case '\\':
+					currentString.WriteByte((*s)[*index])
+					escaped = false
+				default:
+					currentString.WriteByte("\\"[0])
+					currentString.WriteByte((*s)[*index])
+					escaped = false
 				}
-			case (*s)[*index] == '1':
-				nextIndex := *index + 1
-				if nextIndex < len(*s) && (*s)[nextIndex] == '>' {
-					// so next two characters are '1>'
+			} else {
+				switch (*s)[*index] {
+				case '"':
+					// fmt.Printf("ending double quote at position %d\n", *index)
+					return nil
+				case '\\':
+					escaped = true
+				default:
+					currentString.WriteByte((*s)[*index])
+					escaped = false
+				}
+			}
+		}
+		return errors.New("unclosed double quote")
+	}
+
+	parseWord := func(s *string, index *int) (string, error) {
+		currentString := bytes.Buffer{}
+		escaped := false
+
+		for ; *index < len(*s); (*index)++ {
+			if escaped {
+				currentString.WriteByte((*s)[*index])
+				escaped = false
+			} else {
+				switch {
+				case (*s)[*index] == "'"[0]:
+					*index++
+					err := parseSingleQuoted(s, index, &currentString)
+					if err != nil {
+						return currentString.String(), err
+					}
+				case (*s)[*index] == "\""[0]:
+					*index++
+					err := parseDoubleQuoted(s, index, &currentString)
+					if err != nil {
+						return currentString.String(), err
+					}
+				case (*s)[*index] == "\\"[0]:
+					escaped = true
+				case (*s)[*index] == '>':
 					if currentString.Len() > 0 {
 						// we have a word already, so stay on this character and return
 						return currentString.String(), nil
 					} else {
 						// we are not in a word, so return '>'
-						*index++
 						currentString.WriteByte((*s)[*index])
 						*index++
 						return currentString.String(), nil
 					}
-				} else {
+				case (*s)[*index] == '1':
+					nextIndex := *index + 1
+					if nextIndex < len(*s) && (*s)[nextIndex] == '>' {
+						// so next two characters are '1>'
+						if currentString.Len() > 0 {
+							// we have a word already, so stay on this character and return
+							return currentString.String(), nil
+						} else {
+							// we are not in a word, so return '>'
+							*index++
+							currentString.WriteByte((*s)[*index])
+							*index++
+							return currentString.String(), nil
+						}
+					} else {
+						currentString.WriteByte((*s)[*index])
+						escaped = false
+					}
+				case unicode.IsSpace(rune((*s)[*index])):
+					if currentString.Len() > 0 {
+						return currentString.String(), nil
+					}
+				default:
 					currentString.WriteByte((*s)[*index])
 					escaped = false
 				}
-			case unicode.IsSpace(rune((*s)[*index])):
-				if currentString.Len() > 0 {
-					return currentString.String(), nil
-				}
-			default:
-				currentString.WriteByte((*s)[*index])
-				escaped = false
 			}
 		}
+		return currentString.String(), nil
 	}
-	return currentString.String(), nil
-}
 
-func getOut(s *string, index *int) (string, error) {
-	out, err := parseWord(s, index)
-	if err != nil {
-		return "", err
+	getOut := func(s *string, index *int) (string, error) {
+		out, err := parseWord(s, index)
+		if err != nil {
+			return "", err
+		}
+		if len(out) == 0 {
+			return "", errors.New("expected a filename after '>'")
+		}
+		return out, nil
 	}
-	if len(out) == 0 {
-		return "", errors.New("expected a filename after '>'")
-	}
-	return out, nil
-}
 
-func parse(s string) (*cmdEnv, error) {
 	fields := []string{}
 	index := 0
 	rval := cmdEnv{}
@@ -371,33 +371,6 @@ func main() {
 				continue
 			}
 		}
-		// switch cmdEnv.Cmd {
-		// case "":
-		// 	stdout = os.Stdout
-		// 	continue
-		// case "exit":
-		// 	return
-		// case "echo":
-		// 	echoing := strings.Join(cmdEnv.Args, " ")
-		// 	fmt.Fprintf(stdout, "%s\n", echoing)
-		// case "type":
-		// 	fmt.Fprint(stdout, typeCmd(cmdEnv))
-		// case "pwd":
-		// 	fmt.Fprintln(stdout, pwdCmd())
-		// case "cd":
-		// 	err := cdCmd(cmdEnv.Args)
-		// 	if err != nil {
-		// 		fmt.Fprintf(os.Stderr, "cd: %s\n", err)
-		// 	}
-		// default:
-		// 	outmessage, errmessage := callCmd(cmdEnv.Cmd, cmdEnv.Args)
-		// 	if errmessage == "" {
-		// 		fmt.Fprint(stdout, outmessage)
-		// 	} else {
-		// 		fmt.Fprint(os.Stderr, errmessage)
-		// 		fmt.Fprint(stdout, outmessage)
-		// 	}
-		// }
 		what_we_are_doing := getCommand(cmdEnv.Cmd)
 		outmessage, errmessage := what_we_are_doing(*cmdEnv)
 		fmt.Fprint(os.Stderr, errmessage)
