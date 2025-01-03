@@ -99,27 +99,27 @@ func capitalizeFirst(str string) string {
 	return strings.ToUpper(str[:1]) + str[1:]
 }
 
-func doCd(arg0 string) (string, string) {
-	err := os.Chdir(arg0)
-	if err != nil {
-		var pathError *fs.PathError
-		if errors.As(err, &pathError) {
-			err_message := capitalizeFirst(fmt.Sprintf("%s", pathError.Err))
-			return "", fmt.Sprintf("%s: %s\n", arg0, err_message)
-		}
-		// this is unlikely, Chdir errors are almost always PathError
-		return "", fmt.Sprintf("%s\n", err)
-	}
-	// cd succeeded
-	return "", ""
-}
-
-func cdHome() (string, string) {
-	home := os.Getenv("HOME")
-	return doCd(home)
-}
-
 func cdCmd(cmdargs cmdEnv) (string, string) {
+	doCd := func(arg0 string) (string, string) {
+		err := os.Chdir(arg0)
+		if err != nil {
+			var pathError *fs.PathError
+			if errors.As(err, &pathError) {
+				err_message := capitalizeFirst(fmt.Sprintf("%s", pathError.Err))
+				return "", fmt.Sprintf("%s: %s\n", arg0, err_message)
+			}
+			// this is unlikely, Chdir errors are almost always PathError
+			return "", fmt.Sprintf("%s\n", err)
+		}
+		// cd succeeded
+		return "", ""
+	}
+
+	cdHome := func() (string, string) {
+		home := os.Getenv("HOME")
+		return doCd(home)
+	}
+
 	args := cmdargs.Args
 	if len(args) == 0 {
 		return cdHome()
