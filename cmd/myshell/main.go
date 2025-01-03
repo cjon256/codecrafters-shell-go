@@ -95,14 +95,14 @@ func pwdCmd(cmdargs commandEnviroment) (string, string) {
 	return outString, errString
 }
 
-func capitalizeFirst(str string) string {
-	if len(str) == 0 {
-		return str
-	}
-	return strings.ToUpper(str[:1]) + str[1:]
-}
-
 func cdCmd(cmdargs commandEnviroment) (string, string) {
+	capitalizeFirst := func(str string) string {
+		if len(str) == 0 {
+			return str
+		}
+		return strings.ToUpper(str[:1]) + str[1:]
+	}
+
 	doCd := func(arg0 string) (string, string) {
 		err := os.Chdir(arg0)
 		if err != nil {
