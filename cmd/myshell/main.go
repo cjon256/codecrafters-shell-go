@@ -162,7 +162,7 @@ func parse(s string) (*commandEnviroment, error) {
 					currentString.WriteByte((*s)[*index])
 					escaped = false
 				default:
-					currentString.WriteByte("\\"[0])
+					currentString.WriteByte('\\')
 					currentString.WriteByte((*s)[*index])
 					escaped = false
 				}
@@ -198,13 +198,13 @@ func parse(s string) (*commandEnviroment, error) {
 					if err != nil {
 						return currentString.String(), err
 					}
-				case (*s)[*index] == "\""[0]:
+				case (*s)[*index] == '"':
 					*index++
 					err := parseDoubleQuoted(s, index, &currentString)
 					if err != nil {
 						return currentString.String(), err
 					}
-				case (*s)[*index] == "\\"[0]:
+				case (*s)[*index] == '\\':
 					escaped = true
 				case (*s)[*index] == '>':
 					if currentString.Len() > 0 {
