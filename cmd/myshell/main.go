@@ -383,7 +383,6 @@ func main() {
 
 		// properly set stdout if there is one specified
 		if cmdEnv.Stderr != "" {
-			fmt.Printf("stderr is %s\n", cmdEnv.Stderr)
 			var err error
 			stderr, err = os.Create(cmdEnv.Stderr)
 			if err != nil {
