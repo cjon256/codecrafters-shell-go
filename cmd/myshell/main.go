@@ -21,10 +21,12 @@ var (
 )
 
 type commandEnviroment struct {
-	Cmd    string
-	Args   []string
-	Stdout string
-	Stderr string
+	Cmd       string
+	Args      []string
+	Stdout    string
+	OutAppend bool
+	Stderr    string
+	ErrAppend bool
 }
 
 type cmdFunc func(commandEnviroment) (stdout, stderr string)
@@ -214,6 +216,11 @@ func parse(s string) (*commandEnviroment, error) {
 						// we are not in a word, so return '>'
 						currentString.WriteByte((*s)[*index])
 						*index++
+						// handle >>
+						if (*s)[*index] == '>' {
+							currentString.WriteByte((*s)[*index])
+							*index++
+						}
 						return currentString.String(), nil
 					}
 				case (*s)[*index] == '1':
@@ -221,14 +228,13 @@ func parse(s string) (*commandEnviroment, error) {
 					if nextIndex < len(*s) && (*s)[nextIndex] == '>' {
 						// so next two characters are '1>'
 						if currentString.Len() > 0 {
-							// we have a word already, so stay on this character and return
-							return currentString.String(), nil
-						} else {
-							// we are not in a word, so return '>'
-							*index++
+							// we have a word already, add this character and return
+							// `cat foo2>hi` will be parsed as ["cat", "foo2", ">" "hi"]
 							currentString.WriteByte((*s)[*index])
 							*index++
 							return currentString.String(), nil
+						} else {
+							// we just silently discard this
 						}
 					} else {
 						currentString.WriteByte((*s)[*index])
@@ -246,9 +252,16 @@ func parse(s string) (*commandEnviroment, error) {
 							return currentString.String(), nil
 						} else {
 							// we are not in a word, so return '2>'
+							currentString.WriteByte((*s)[*index])
 							*index++
+							currentString.WriteByte((*s)[*index])
 							*index++
-							return "2>", nil
+							// handle 2>>
+							if (*s)[*index] == '>' {
+								currentString.WriteByte((*s)[*index])
+								*index++
+							}
+							return currentString.String(), nil
 						}
 					} else {
 						currentString.WriteByte((*s)[*index])
@@ -297,6 +310,14 @@ func parse(s string) (*commandEnviroment, error) {
 			if err != nil {
 				return &rval, err
 			}
+			rval.Stdout = out
+		case ">>":
+			// TODO handle if there are multiple redirects in one commandline?
+			out, err := getOut(1, &s, &index)
+			if err != nil {
+				return &rval, err
+			}
+			rval.OutAppend = true
 			rval.Stdout = out
 		case "2>":
 			out2, err := getOut(2, &s, &index)
@@ -381,10 +402,18 @@ func main() {
 			continue
 		}
 
+		appendFile := func(name string) (*os.File, error) {
+			return os.OpenFile(name, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		}
+
 		// properly set stdout if there is one specified
 		if cmdEnv.Stderr != "" {
 			var err error
-			stderr, err = os.Create(cmdEnv.Stderr)
+			if cmdEnv.ErrAppend {
+				stderr, err = appendFile(cmdEnv.Stderr)
+			} else {
+				stderr, err = os.Create(cmdEnv.Stderr)
+			}
 			if err != nil {
 				stderr = os.Stderr
 				fmt.Fprintf(stderr, "Err: %s\n", err)
@@ -393,7 +422,11 @@ func main() {
 		}
 		if cmdEnv.Stdout != "" {
 			var err error
-			stdout, err = os.Create(cmdEnv.Stdout)
+			if cmdEnv.OutAppend {
+				stdout, err = appendFile(cmdEnv.Stdout)
+			} else {
+				stdout, err = os.Create(cmdEnv.Stdout)
+			}
 			if err != nil {
 				stdout = os.Stdout
 				fmt.Fprintf(stderr, "Err: %s\n", err)
@@ -404,7 +437,13 @@ func main() {
 		fmt.Fprint(stderr, errmessage)
 		fmt.Fprint(stdout, outmessage)
 
-		stdout = os.Stdout
-		stderr = os.Stderr
+		if stdout != os.Stdout {
+			stdout.Close()
+			stdout = os.Stdout
+		}
+		if stderr != os.Stderr {
+			stderr.Close()
+			stderr = os.Stderr
+		}
 	}
 }
