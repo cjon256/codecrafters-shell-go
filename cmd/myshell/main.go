@@ -88,7 +88,8 @@ func pwdCmd(_ cmdEnv) (string, string) {
 	if err != nil {
 		errString = fmt.Sprintln(err)
 	}
-	return path + "\n", errString
+	outString := path + "\n"
+	return outString, errString
 }
 
 func capitalizeFirst(str string) string {
