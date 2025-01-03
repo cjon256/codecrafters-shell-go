@@ -234,6 +234,26 @@ func parse(s string) (*commandEnviroment, error) {
 						currentString.WriteByte((*s)[*index])
 						escaped = false
 					}
+				case (*s)[*index] == '2':
+					nextIndex := *index + 1
+					if nextIndex < len(*s) && (*s)[nextIndex] == '>' {
+						// so next two characters are '2>'
+						if currentString.Len() > 0 {
+							// we have a word already, add this character and return
+							// `cat foo2>hi` will be parsed as ["cat", "foo2", ">" "hi"]
+							currentString.WriteByte((*s)[*index])
+							*index++
+							return currentString.String(), nil
+						} else {
+							// we are not in a word, so return '2>'
+							*index++
+							*index++
+							return "2>", nil
+						}
+					} else {
+						currentString.WriteByte((*s)[*index])
+						escaped = false
+					}
 				case unicode.IsSpace(rune((*s)[*index])):
 					if currentString.Len() > 0 {
 						return currentString.String(), nil
@@ -247,13 +267,13 @@ func parse(s string) (*commandEnviroment, error) {
 		return currentString.String(), nil
 	}
 
-	getOut := func(s *string, index *int) (string, error) {
+	getOut := func(fd int, s *string, index *int) (string, error) {
 		out, err := parseWord(s, index)
 		if err != nil {
 			return "", err
 		}
 		if len(out) == 0 {
-			return "", errors.New("expected a filename after '>'")
+			return "", fmt.Errorf("expected a filename after '%d>'", fd)
 		}
 		return out, nil
 	}
@@ -270,14 +290,21 @@ func parse(s string) (*commandEnviroment, error) {
 		if len(word) == 0 {
 			continue
 		}
-		if word == ">" {
+		switch word {
+		case ">":
 			// TODO handle if there are multiple redirects in one commandline?
-			out, err := getOut(&s, &index)
+			out, err := getOut(1, &s, &index)
 			if err != nil {
 				return &rval, err
 			}
 			rval.Stdout = out
-		} else {
+		case "2>":
+			out2, err := getOut(2, &s, &index)
+			if err != nil {
+				return &rval, err
+			}
+			rval.Stderr = out2
+		default:
 			cmdargs = append(cmdargs, word)
 		}
 	}
@@ -356,8 +383,9 @@ func main() {
 
 		// properly set stdout if there is one specified
 		if cmdEnv.Stderr != "" {
+			fmt.Printf("stderr is %s\n", cmdEnv.Stderr)
 			var err error
-			stderr, err = os.Create(cmdEnv.Stdout)
+			stderr, err = os.Create(cmdEnv.Stderr)
 			if err != nil {
 				stderr = os.Stderr
 				fmt.Fprintf(stderr, "Err: %s\n", err)
@@ -374,7 +402,7 @@ func main() {
 			}
 		}
 		outmessage, errmessage := getCommand(cmdEnv.Cmd)(*cmdEnv)
-		fmt.Fprint(os.Stderr, errmessage)
+		fmt.Fprint(stderr, errmessage)
 		fmt.Fprint(stdout, outmessage)
 
 		stdout = os.Stdout
