@@ -14,7 +14,20 @@ import (
 	"unicode"
 )
 
-var path []string
+var (
+	builtins = make(map[string]cmdFunc)
+	path     []string
+	cmdLine  string
+)
+
+type cmdEnv struct {
+	Cmd    string
+	Args   []string
+	Stdout string
+	Stderr string
+}
+
+type cmdFunc func(cmdEnv) (stdout, stderr string)
 
 func findFile(fname string) (string, error) {
 	for _, p := range path {
@@ -27,21 +40,25 @@ func findFile(fname string) (string, error) {
 	return "", errors.New("")
 }
 
-func typeCmd(cmd string) string {
+func typeCmd(cmdargs cmdEnv) (string, string) {
+	// TODO if args has multiple words we should type them all
+	cmd := cmdargs.Args[0]
 	if cmd == "exit" || cmd == "echo" || cmd == "type" || cmd == "pwd" || cmd == "cd" {
-		return fmt.Sprintf("%s is a shell builtin\n", cmd)
+		return fmt.Sprintf("%s is a shell builtin\n", cmd), ""
 	} else {
 		loc, err := findFile(cmd)
 		if err == nil {
-			return fmt.Sprintf("%s is %s\n", cmd, loc)
+			return fmt.Sprintf("%s is %s\n", cmd, loc), ""
 		} else {
-			return fmt.Sprintf("%s: not found\n", cmd)
+			return fmt.Sprintf("%s: not found\n", cmd), ""
 		}
 	}
 }
 
-func callCmd(cmd string, args []string) (string, string) {
+func callCmd(cmdargs cmdEnv) (string, string) {
 	// need path to the actual command
+	cmd := cmdargs.Cmd
+	args := cmdargs.Args
 	cmdName, err := findFile(cmd)
 	if err != nil {
 		// command not found
@@ -59,13 +76,13 @@ func callCmd(cmd string, args []string) (string, string) {
 	return outStr.String(), errStr.String()
 }
 
-func pwdCmd() string {
-	// TODO maybe doesn't need a separate function?
+func pwdCmd(_ cmdEnv) (string, string) {
+	errString := ""
 	path, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintln(os.Stdout, err)
+		errString = fmt.Sprintln(err)
 	}
-	return path
+	return path + "\n", errString
 }
 
 func capitalizeFirst(str string) string {
@@ -75,32 +92,33 @@ func capitalizeFirst(str string) string {
 	return strings.ToUpper(str[:1]) + str[1:]
 }
 
-func doCd(arg0 string) error {
+func doCd(arg0 string) (string, string) {
 	err := os.Chdir(arg0)
 	if err != nil {
 		var pathError *fs.PathError
 		if errors.As(err, &pathError) {
 			err_message := capitalizeFirst(fmt.Sprintf("%s", pathError.Err))
-			return fmt.Errorf("%s: %s", arg0, err_message)
+			return "", fmt.Sprintf("%s: %s\n", arg0, err_message)
 		}
 		// this is unlikely, Chdir errors are almost always PathError
-		return err
+		return "", fmt.Sprintf("%s\n", err)
 	}
 	// cd succeeded
-	return nil
+	return "", ""
 }
 
-func cdHome() error {
+func cdHome() (string, string) {
 	home := os.Getenv("HOME")
 	return doCd(home)
 }
 
-func cdCmd(args []string) error {
+func cdCmd(cmdargs cmdEnv) (string, string) {
+	args := cmdargs.Args
 	if len(args) == 0 {
 		return cdHome()
 	}
 	if len(args) > 1 {
-		return errors.New("chdir too many arguments")
+		return "", "chdir too many arguments"
 	}
 	arg0 := args[0]
 	if arg0 == "~" {
@@ -232,16 +250,10 @@ func getOut(s *string, index *int) (string, error) {
 	return out, nil
 }
 
-type commandEnvironment struct {
-	Cmd    string
-	Args   []string
-	Stdout string
-}
-
-func parse(s string) (*commandEnvironment, error) {
+func parse(s string) (*cmdEnv, error) {
 	fields := []string{}
 	index := 0
-	rval := commandEnvironment{}
+	rval := cmdEnv{}
 
 	for index < len(s) {
 		word, err := parseWord(&s, &index)
@@ -268,7 +280,7 @@ func parse(s string) (*commandEnvironment, error) {
 	return &rval, nil
 }
 
-func getCmdEnv(reader *bufio.Reader) (*commandEnvironment, error) {
+func getCmdEnv(reader *bufio.Reader) (*cmdEnv, error) {
 	// get input from the user
 	cmdLine, err := reader.ReadString('\n')
 	if err != nil {
@@ -284,12 +296,45 @@ func getCmdEnv(reader *bufio.Reader) (*commandEnvironment, error) {
 	return parse(cmdLine)
 }
 
+func exitCmd(_ cmdEnv) (string, string) {
+	os.Exit(0)
+	// silly that this needs this, but...
+	return "", ""
+}
+
+func echoCmd(cmdargs cmdEnv) (string, string) {
+	echoing := strings.Join(cmdargs.Args, " ") + "\n"
+	// fmt.Fprintf(stdout, "%s\n", echoing)
+	return echoing, ""
+}
+
+func noopCmd(_ cmdEnv) (string, string) {
+	return "", ""
+}
+
+func getCommand(cmd string) cmdFunc {
+	cmdfunc, ok := builtins[cmd]
+	if !ok {
+		// not a builtin, try calling the command
+		return callCmd
+	}
+	return cmdfunc
+}
+
 func main() {
+	builtins["type"] = typeCmd
+	builtins["exit"] = exitCmd
+	builtins["pwd"] = pwdCmd
+	builtins["echo"] = echoCmd
+	builtins["cd"] = cdCmd
+	builtins[""] = noopCmd
+
 	reader := bufio.NewReader(os.Stdin)
 	raw_path := os.Getenv("PATH")
 	path = strings.Split(raw_path, ":")
 	stdout := os.Stdout
-	var cmdEnv *commandEnvironment
+	stderr := os.Stderr
+	var cmdEnv *cmdEnv
 
 	for {
 		fmt.Fprint(stdout, "$ ")
@@ -301,43 +346,57 @@ func main() {
 			continue
 		}
 
+		if cmdEnv.Stderr != "" {
+			var err error
+			stderr, err = os.Create(cmdEnv.Stdout)
+			if err != nil {
+				stderr = os.Stderr
+				fmt.Fprintf(stderr, "Err: %s\n", err)
+				continue
+			}
+		}
 		if cmdEnv.Stdout != "" {
 			var err error
 			stdout, err = os.Create(cmdEnv.Stdout)
 			if err != nil {
 				stdout = os.Stdout
-				fmt.Fprintf(os.Stderr, "Err: %s\n", err)
+				fmt.Fprintf(stderr, "Err: %s\n", err)
 				continue
 			}
 		}
-		switch cmdEnv.Cmd {
-		case "":
-			stdout = os.Stdout
-			continue
-		case "exit":
-			return
-		case "echo":
-			echoing := strings.Join(cmdEnv.Args, " ")
-			fmt.Fprintf(stdout, "%s\n", echoing)
-		case "type":
-			fmt.Fprint(stdout, typeCmd(cmdEnv.Args[0]))
-		case "pwd":
-			fmt.Fprintln(stdout, pwdCmd())
-		case "cd":
-			err := cdCmd(cmdEnv.Args)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "cd: %s\n", err)
-			}
-		default:
-			outmessage, errmessage := callCmd(cmdEnv.Cmd, cmdEnv.Args)
-			if errmessage == "" {
-				fmt.Fprint(stdout, outmessage)
-			} else {
-				fmt.Fprint(os.Stderr, errmessage)
-				fmt.Fprint(stdout, outmessage)
-			}
-		}
+		// switch cmdEnv.Cmd {
+		// case "":
+		// 	stdout = os.Stdout
+		// 	continue
+		// case "exit":
+		// 	return
+		// case "echo":
+		// 	echoing := strings.Join(cmdEnv.Args, " ")
+		// 	fmt.Fprintf(stdout, "%s\n", echoing)
+		// case "type":
+		// 	fmt.Fprint(stdout, typeCmd(cmdEnv))
+		// case "pwd":
+		// 	fmt.Fprintln(stdout, pwdCmd())
+		// case "cd":
+		// 	err := cdCmd(cmdEnv.Args)
+		// 	if err != nil {
+		// 		fmt.Fprintf(os.Stderr, "cd: %s\n", err)
+		// 	}
+		// default:
+		// 	outmessage, errmessage := callCmd(cmdEnv.Cmd, cmdEnv.Args)
+		// 	if errmessage == "" {
+		// 		fmt.Fprint(stdout, outmessage)
+		// 	} else {
+		// 		fmt.Fprint(os.Stderr, errmessage)
+		// 		fmt.Fprint(stdout, outmessage)
+		// 	}
+		// }
+		what_we_are_doing := getCommand(cmdEnv.Cmd)
+		outmessage, errmessage := what_we_are_doing(*cmdEnv)
+		fmt.Fprint(os.Stderr, errmessage)
+		fmt.Fprint(stdout, outmessage)
 
 		stdout = os.Stdout
+		stderr = os.Stderr
 	}
 }
