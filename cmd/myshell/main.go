@@ -325,6 +325,13 @@ func parse(s string) (*commandEnviroment, error) {
 				return &rval, err
 			}
 			rval.Stderr = out2
+		case "2>>":
+			out2, err := getOut(2, &s, &index)
+			if err != nil {
+				return &rval, err
+			}
+			rval.ErrAppend = true
+			rval.Stderr = out2
 		default:
 			cmdargs = append(cmdargs, word)
 		}
