@@ -139,10 +139,8 @@ func parse(s string) (*commandEnviroment, error) {
 		for ; *index < len(*s); (*index)++ {
 			switch (*s)[(*index)] {
 			case '\'':
-				// fmt.Printf("found a single quote at index %d\n", *index)
 				return nil
 			default:
-				// fmt.Printf("adding byte %s\n", string((*s)[*index]))
 				currentString.WriteByte((*s)[*index])
 			}
 		}
@@ -169,7 +167,6 @@ func parse(s string) (*commandEnviroment, error) {
 			} else {
 				switch (*s)[*index] {
 				case '"':
-					// fmt.Printf("ending double quote at position %d\n", *index)
 					return nil
 				case '\\':
 					escaped = true
@@ -311,7 +308,6 @@ func exitCmd(_ commandEnviroment) (string, string) {
 
 func echoCmd(cmdargs commandEnviroment) (string, string) {
 	echoing := strings.Join(cmdargs.Args, " ") + "\n"
-	// fmt.Fprintf(stdout, "%s\n", echoing)
 	return echoing, ""
 }
 
