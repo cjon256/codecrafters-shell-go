@@ -82,8 +82,11 @@ func callCmd(cmdargs commandEnviroment) (string, string) {
 	return outStr.String(), errStr.String()
 }
 
-func pwdCmd(_ commandEnviroment) (string, string) {
+func pwdCmd(cmdargs commandEnviroment) (string, string) {
 	errString := ""
+	if len(cmdargs.Args) > 0 {
+		return "", "pwd: too many arguments\n"
+	}
 	path, err := os.Getwd()
 	if err != nil {
 		errString = fmt.Sprintln(err)
@@ -255,7 +258,7 @@ func parse(s string) (*commandEnviroment, error) {
 		return out, nil
 	}
 
-	fields := []string{}
+	cmdargs := []string{}
 	index := 0
 	rval := commandEnviroment{}
 
@@ -264,23 +267,24 @@ func parse(s string) (*commandEnviroment, error) {
 		if err != nil {
 			return &rval, err
 		}
-		if len(word) > 0 {
-			if word == ">" {
-				out, err := getOut(&s, &index)
-				if err != nil {
-					return &rval, err
-				}
-				rval.Stdout = out
-			} else {
-				fields = append(fields, word)
+		if len(word) == 0 {
+			continue
+		}
+		if word == ">" {
+			out, err := getOut(&s, &index)
+			if err != nil {
+				return &rval, err
 			}
+			rval.Stdout = out
+		} else {
+			cmdargs = append(cmdargs, word)
 		}
 	}
-	if len(fields) == 0 {
+	if len(cmdargs) == 0 {
 		return &rval, nil
 	}
-	rval.Cmd = fields[0]
-	rval.Args = fields[1:]
+	rval.Cmd = cmdargs[0]
+	rval.Args = cmdargs[1:]
 	return &rval, nil
 }
 
